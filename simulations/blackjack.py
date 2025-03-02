@@ -51,7 +51,7 @@ class Deck:
 
 # STRATEGIES
 
-def calculateWinProbability(composition):
+def calculateWinProbabilityBasic(composition):
     # TODO: implement a strategy to calculate the win probability given exact current composition
     # is there a library that helps with this?
     pass
@@ -65,8 +65,21 @@ def optimalStrategyExact(player_sum, dealer_sum, player_soft, composition):
     pass
 
 def optimalStrategyHiLo(player_sum, dealer_sum, player_soft, composition):
-    # TODO: implement deviations from the Illustious 18 and Fab
+    # TODO: implement deviations from the Illustrious 18 and Fab
     # https://www.casinoguardian.co.uk/blackjack/blackjack-illustrious-18/
+
+    low_count = sum(composition[rank] for rank in Card.ranks if rank in ["2", "3", "4", "5", "6"])
+    high_count = sum(composition[rank] for rank in Card.ranks if rank in ["10", "Jack", "Queen", "King", "Ace"])
+    count = high_count - low_count
+
+    # The player’s hand is 15, the dealer’s upcard is 9, and the true count is +3
+
+    """
+
+    The player’s hand is 15, the dealer’s upcard is 10, and the true count is 0
+    The player’s hand is 15, the dealer’s upcard is an ace, and the true count is either +2 (in S17) or -1 (in H17)
+    The player’s hand is 14, the dealer’s upcard is 19, and the true count amounts to +4
+    """
 
     # 1) If player's sum <= 11:
     if player_sum <= 11:
@@ -290,9 +303,11 @@ def winBlackjackBasic(turns, bankroll):
         dealer1 = deck.draw_card() # public dealer's card
         dealer2 = deck.draw_card() # private dealer's card
 
-        if is_blackjack(mine1, mine2):
+        my_blackjack = is_blackjack(mine1, mine2)
+        dealer_blackjack = is_blackjack(dealer1, dealer2)
+        if my_blackjack:
             # Check if dealer also has blackjack (push scenario)
-            if is_blackjack(dealer1, dealer2):
+            if dealer_blackjack:
                 # It's a push: do nothing to bankroll
                 pass
             else:
@@ -304,7 +319,6 @@ def winBlackjackBasic(turns, bankroll):
             # we skip the rest of the round logic
             # Optionally continue to next round
             # (No further hits / no dealer draws)
-            continue
         else:
             player_soft_count = (mine1.rank == "Ace") + (mine2.rank == "Ace")
 
@@ -346,32 +360,34 @@ def winBlackjackBasic(turns, bankroll):
 
             if(mine > 21):
                 bankroll -= bet
+            else:
+                dealer += dealer2.get_card_value()
 
-            dealer += dealer2.get_card_value()
+                dealer_soft_count = (dealer1.rank == "Ace") + (dealer2.rank == "Ace")
+                while(dealer < 17):
+                    drawn_card = deck.draw_card()
+                    if(drawn_card.rank == "Ace"):
+                        dealer_soft_count += 1
+                    dealer += drawn_card.get_card_value()
 
-            dealer_soft_count = (dealer1.rank == "Ace") + (dealer2.rank == "Ace")
-
-            while(dealer < 17):
-                drawn_card = deck.draw_card()
-                if(drawn_card.rank == "Ace"):
-                    dealer_soft_count += 1
-                dealer += drawn_card.get_card_value()
-
-                if(dealer >= 22 and dealer_soft_count > 0):
-                    dealer -= 10
-                    dealer_soft_count -= 1
-
-            if(dealer > 21):
-                bankroll += bet
-            elif(mine > dealer):
-                bankroll += bet
-            elif(mine < dealer):
-                bankroll -= bet
+                    if(dealer >= 22 and dealer_soft_count > 0):
+                        dealer -= 10
+                        dealer_soft_count -= 1
+                if dealer_blackjack:
+                    bankroll -= bet
+                elif(dealer > 21):
+                    bankroll += bet
+                elif(mine > dealer):
+                    bankroll += bet
+                elif(mine < dealer):
+                    bankroll -= bet
                 
         if (len(deck.cards) / 208 < 0.75): # reshuffle into the shoe when this happens
             deck.cards += deck.discard
             deck.shuffle()
+            composition = {rank: 16 for rank in Card.ranks}
             print("shuffling")
+            print(bankroll)
 
     return bankroll
 
