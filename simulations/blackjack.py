@@ -254,11 +254,27 @@ def optimalStrategyBasic(player_sum, dealer_sum, player_soft):
             return "stand"
 
 # ----------------------------------------------
+# SIMULATION HELPERS
 
-# SIMULATION
+def is_blackjack(card1, card2):
+    """
+    Returns True if the two-card hand is a Blackjack:
+    - One card is an Ace
+    - The other card is 10, Jack, Queen, or King
+    """
+    ten_valued_ranks = {"10", "Jack", "Queen", "King"}
+    # Check both possible orders (Ace + ten-value) or (ten-value + Ace)
+    return (
+        (card1.rank == "Ace" and card2.rank in ten_valued_ranks) or
+        (card2.rank == "Ace" and card1.rank in ten_valued_ranks)
+    )
+
 
 MIN_BET = 10 # 10 dollar min bet
 MAX_BET = 10000
+
+# SIMULATION
+
 
 def winBlackjackBasic(turns, bankroll):
     deck = Deck()
@@ -274,68 +290,84 @@ def winBlackjackBasic(turns, bankroll):
         dealer1 = deck.draw_card() # public dealer's card
         dealer2 = deck.draw_card() # private dealer's card
 
-        player_soft_count = (mine1.rank == "Ace") + (mine2.rank == "Ace")
-
-        # do basic optimal policy
-        mine = mine1.get_card_value() + mine2.get_card_value()
-        dealer = dealer1.get_card_value()
-
-        while(mine < 22):
-            action = optimalStrategyBasic(mine, dealer, player_soft_count)
-            if action == "hit":
-                drawn_card = deck.draw_card()
-                mine += drawn_card.get_card_value()
-
-                if(drawn_card.rank == "Ace"):
-                    player_soft_count += 1
-
-                if(mine >= 22 and player_soft_count > 0):
-                    mine -= 10
-                    player_soft_count -= 1
-
-            elif action == "double":
-                drawn_card = deck.draw_card()
-                mine += drawn_card.get_card_value()
-
-
-                if(drawn_card.rank == "Ace"):
-                    player_soft_count += 1
-
-                if(mine >= 22 and player_soft_count > 0):
-                    mine -= 10
-                    player_soft_count -= 1
-                
-                bet *= 2
-                break
+        if is_blackjack(mine1, mine2):
+            # Check if dealer also has blackjack (push scenario)
+            if is_blackjack(dealer1, dealer2):
+                # It's a push: do nothing to bankroll
+                pass
             else:
-                break
-        
-        # resolve the game
-        
-        if(mine > 21):
-            bankroll -= bet
-
-        dealer += dealer2.get_card_value()
-
-        dealer_soft_count = (dealer1.rank == "Ace") + (dealer2.rank == "Ace")
-
-        while(dealer < 17):
-            drawn_card = deck.draw_card()
-            if(drawn_card.rank == "Ace"):
-                dealer_soft_count += 1
-            dealer += drawn_card.get_card_value()
-
-            if(dealer >= 22 and dealer_soft_count > 0):
-                dealer -= 10
-                dealer_soft_count -= 1
-
-        if(dealer > 21):
-            bankroll += bet
-        elif(mine > dealer):
-            bankroll += bet
-        elif(mine < dealer):
-            bankroll -= bet
+                # Player wins with blackjack => pays 3:2
+                # That is a +1.5 * bet profit in addition to your baseline (no bet removed yet).
+                bankroll += 1.5 * bet
             
+            # Since round ends immediately if player has blackjack
+            # we skip the rest of the round logic
+            # Optionally continue to next round
+            # (No further hits / no dealer draws)
+            continue
+        else:
+            player_soft_count = (mine1.rank == "Ace") + (mine2.rank == "Ace")
+
+            # do basic optimal policy
+            mine = mine1.get_card_value() + mine2.get_card_value()
+            dealer = dealer1.get_card_value()
+
+            while(mine < 22):
+                action = optimalStrategyBasic(mine, dealer, player_soft_count)
+                if action == "hit":
+                    drawn_card = deck.draw_card()
+                    mine += drawn_card.get_card_value()
+
+                    if(drawn_card.rank == "Ace"):
+                        player_soft_count += 1
+
+                    if(mine >= 22 and player_soft_count > 0):
+                        mine -= 10
+                        player_soft_count -= 1
+
+                elif action == "double":
+                    drawn_card = deck.draw_card()
+                    mine += drawn_card.get_card_value()
+
+
+                    if(drawn_card.rank == "Ace"):
+                        player_soft_count += 1
+
+                    if(mine >= 22 and player_soft_count > 0):
+                        mine -= 10
+                        player_soft_count -= 1
+                    
+                    bet *= 2
+                    break
+                else:
+                    break
+            
+            # resolve the game
+
+            if(mine > 21):
+                bankroll -= bet
+
+            dealer += dealer2.get_card_value()
+
+            dealer_soft_count = (dealer1.rank == "Ace") + (dealer2.rank == "Ace")
+
+            while(dealer < 17):
+                drawn_card = deck.draw_card()
+                if(drawn_card.rank == "Ace"):
+                    dealer_soft_count += 1
+                dealer += drawn_card.get_card_value()
+
+                if(dealer >= 22 and dealer_soft_count > 0):
+                    dealer -= 10
+                    dealer_soft_count -= 1
+
+            if(dealer > 21):
+                bankroll += bet
+            elif(mine > dealer):
+                bankroll += bet
+            elif(mine < dealer):
+                bankroll -= bet
+                
         if (len(deck.cards) / 208 < 0.75): # reshuffle into the shoe when this happens
             deck.cards += deck.discard
             deck.shuffle()
